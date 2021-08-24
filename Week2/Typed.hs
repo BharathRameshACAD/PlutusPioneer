@@ -10,13 +10,14 @@
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
-module Week02.Homework1 where
+module Week02.Typed where
 
 import           Control.Monad        hiding (fmap)
 import           Data.Map             as Map
 import           Data.Text            (Text)
 import           Data.Void            (Void)
 import           Plutus.Contract
+import           PlutusTx             (Data (..))
 import qualified PlutusTx
 import           PlutusTx.Prelude     hiding (Semigroup(..), unless)
 import           Ledger               hiding (singleton)
@@ -26,25 +27,24 @@ import           Ledger.Ada           as Ada
 import           Playground.Contract  (printJson, printSchemas, ensureKnownCurrencies, stage)
 import           Playground.TH        (mkKnownCurrencies, mkSchemaDefinitions)
 import           Playground.Types     (KnownCurrency (..))
-import           Prelude              (IO, Semigroup (..), String, undefined)
+import           Prelude              (IO, Semigroup (..), String)
 import           Text.Printf          (printf)
 
 {-# INLINABLE mkValidator #-}
--- This should validate if and only if the two Booleans in the redeemer are equal!
-mkValidator :: () -> (Bool, Bool) -> ScriptContext -> Bool
-mkValidator _ (x,y) _ = traceIfFalse "unequal flags" $ x == y -- FIX ME!
+mkValidator :: () -> Integer -> ScriptContext -> Bool
+mkValidator _ r _ = traceIfFalse "wrong redeemer" $ r == 42
 
 data Typed
 instance Scripts.ValidatorTypes Typed where
     type instance DatumType Typed = ()
-    type instance RedeemerType Typed = (Bool, Bool)
+    type instance RedeemerType Typed = Integer
 
 typedValidator :: Scripts.TypedValidator Typed
 typedValidator = Scripts.mkTypedValidator @Typed
     $$(PlutusTx.compile [|| mkValidator ||])
     $$(PlutusTx.compile [|| wrap ||])
   where
-    wrap = Scripts.wrapValidator @() @(Bool, Bool)
+    wrap = Scripts.wrapValidator @() @Integer
 
 validator :: Validator
 validator = Scripts.validatorScript typedValidator
@@ -57,7 +57,7 @@ scrAddress = scriptAddress validator
 
 type GiftSchema =
             Endpoint "give" Integer
-        .\/ Endpoint "grab" (Bool, Bool)
+        .\/ Endpoint "grab" Integer
 
 give :: AsContractError e => Integer -> Contract w s e ()
 give amount = do
@@ -66,14 +66,14 @@ give amount = do
     void $ awaitTxConfirmed $ txId ledgerTx
     logInfo @String $ printf "made a gift of %d lovelace" amount
 
-grab :: forall w s e. AsContractError e => (Bool, Bool) -> Contract w s e ()
-grab bs = do
+grab :: forall w s e. AsContractError e => Integer -> Contract w s e ()
+grab r = do
     utxos <- utxoAt scrAddress
     let orefs   = fst <$> Map.toList utxos
         lookups = Constraints.unspentOutputs utxos      <>
                   Constraints.otherScript validator
         tx :: TxConstraints Void Void
-        tx      = mconcat [mustSpendScriptOutput oref $ Redeemer $ PlutusTx.toData bs | oref <- orefs]
+        tx      = mconcat [mustSpendScriptOutput oref $ Redeemer $ I r | oref <- orefs]
     ledgerTx <- submitTxConstraintsWith @Void lookups tx
     void $ awaitTxConfirmed $ txId ledgerTx
     logInfo @String $ "collected gifts"

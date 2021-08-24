@@ -10,29 +10,31 @@
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
-module Week02.Homework1 where
+module Week02.Solution1 where
 
 import           Control.Monad        hiding (fmap)
 import           Data.Map             as Map
 import           Data.Text            (Text)
 import           Data.Void            (Void)
 import           Plutus.Contract
+import           PlutusTx             (Data (..))
 import qualified PlutusTx
 import           PlutusTx.Prelude     hiding (Semigroup(..), unless)
 import           Ledger               hiding (singleton)
 import           Ledger.Constraints   as Constraints
+import qualified Ledger.Scripts       as Scripts hiding (validatorHash)
 import qualified Ledger.Typed.Scripts as Scripts
 import           Ledger.Ada           as Ada
 import           Playground.Contract  (printJson, printSchemas, ensureKnownCurrencies, stage)
 import           Playground.TH        (mkKnownCurrencies, mkSchemaDefinitions)
 import           Playground.Types     (KnownCurrency (..))
-import           Prelude              (IO, Semigroup (..), String, undefined)
+import           Prelude              (IO, Semigroup (..), String)
 import           Text.Printf          (printf)
 
 {-# INLINABLE mkValidator #-}
 -- This should validate if and only if the two Booleans in the redeemer are equal!
 mkValidator :: () -> (Bool, Bool) -> ScriptContext -> Bool
-mkValidator _ (x,y) _ = traceIfFalse "unequal flags" $ x == y -- FIX ME!
+mkValidator () (b, c) _ = traceIfFalse "wrong redeemer" $ b == c
 
 data Typed
 instance Scripts.ValidatorTypes Typed where
